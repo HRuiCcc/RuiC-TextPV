@@ -1,0 +1,289 @@
+<div id="app">
+  <!-- ===================== 顶栏 ===================== -->
+  <header class="top">
+    <div class="top-r1">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">文字PV</span>
+        <span class="word">RuiC-TextPV</span>
+        <span class="tag">歌词影像工作台</span>
+      </div>
+      <div class="proj">
+        <input id="songTitle" type="text" placeholder="曲名（用于片头卡片与画面信息）" aria-label="曲名">
+        <input id="songArtist" type="text" placeholder="作者 / 艺人" aria-label="作者">
+      </div>
+      <div class="modes" role="group" aria-label="界面模式">
+        <button id="modeEasy" aria-pressed="false" title="只留最关键的按钮：一键成片与导出">简易</button>
+        <button id="modePro" aria-pressed="true" title="展开全部调节项">专业</button>
+      </div>
+    </div>
+    <div class="top-r2">
+      <label class="btn" title="打开之前保存的工程文件（.json）">打开<input id="fileProject" type="file" accept=".json,application/json" hidden></label>
+      <button id="btnSave" class="btn" title="把当前工程存成 .json">保存</button>
+      <button id="btnStruct" class="btn" title="导出这一版的完整结构数据（分镜、排版、演出、配色）">导出结构数据</button>
+      <button id="btnHelp" class="btn" title="使用说明与授权">说明</button>
+      <span class="spacer"></span>
+      <span id="statusRight" class="mono dim"></span>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- ===================== 左：歌词与时间 ===================== -->
+    <section class="col col-left" aria-label="歌词与节拍">
+      <div class="sec">
+        <div class="sec-h"><h2>歌词</h2><button id="btnSyntax" class="btn tiny" aria-expanded="false">写法</button></div>
+        <div id="syntax" class="syntax" hidden>
+          <ul>
+            <li>一行 = 一句。空一行表示这里停一下</li>
+            <li><code>夜色折成两半/我数着灯</code> —— <code>/</code> 手动指定切分点</li>
+            <li><code>*别急着*</code> —— 强调这一段，会挑更冲的排版与演出</li>
+            <li>行尾 <code>!</code> —— 加闪光与震动</li>
+            <li><code>歌词|小字</code> —— 竖线后面是注释小字</li>
+            <li><code>[01:23.45]歌词</code> —— 直接用 LRC 时间戳</li>
+            <li><code>#</code> 开头的行是注释，会被忽略</li>
+          </ul>
+        </div>
+        <textarea id="lyrics" spellcheck="false" aria-label="歌词，一行一句"></textarea>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><h2>音频与节拍</h2></div>
+        <div id="audioName" class="audio-name dim">还没有音乐。载入后会自动测出速度与拍点，分镜的切口会往拍上贴。</div>
+        <div class="row">
+          <label class="btn" title="mp3 / wav / m4a 都行">载入音乐<input id="audioFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" hidden></label>
+          <button id="btnTap" class="btn" title="播放音乐，跟着节奏给每句打点">跟着音乐打点</button>
+          <button id="btnClearAudio" class="btn tiny">清除</button>
+        </div>
+        <details class="timing-detail">
+          <summary>精调时间与节拍</summary>
+        <div class="fields">
+          <label class="fd">BPM<input id="bpm" type="number" min="0" max="300" step="0.1" placeholder="自动"></label>
+          <label class="fd">起始(秒)<input id="offset" type="number" min="0" step="0.05"></label>
+          <label class="fd">每句时长<input id="lineScale" type="number" min="0.4" max="3" step="0.05"></label>
+          <label class="fd">收尾留白<input id="tail" type="number" min="0" max="5" step="0.1"></label>
+        </div>
+        <div class="row">
+          <label class="chk inline"><input id="snap" type="checkbox" checked><span>切口对齐到拍点</span></label>
+          <button id="btnResetTimes" class="btn tiny">清掉手动打点</button>
+        </div>
+        </details>
+        <label class="chk inline"><input id="includeAudio" type="checkbox" checked><span>把音乐混进导出的 MP4</span></label>
+        <div id="tapPanel" class="tapbox" hidden>
+          <p class="hint">音乐会开始播放。每句要唱出来的那一刻，按 <span class="kbd">空格</span> 或点下面的按钮。</p>
+          <div class="tap-next">下一句 · <b id="tapLine">—</b></div>
+          <button id="tapBtn" class="tap">打点</button>
+          <button id="tapStop" class="btn tiny">结束</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><h2>分镜表</h2><span id="linesInfo" class="mono dim"></span></div>
+        <div class="line-list" id="lineList"></div>
+      </div>
+    </section>
+
+    <!-- ===================== 中：舞台 ===================== -->
+    <section class="col col-stage" aria-label="预览">
+      <div class="stage-heading"><div><strong>画面预览</strong><span>拖动时间轴，检查每个歌词镜头</span></div><span class="stage-live">LIVE PREVIEW</span></div>
+      <div class="viewport" id="viewport">
+        <canvas id="view" width="1280" height="720"></canvas>
+        <div class="vp-badge" id="vpBadge" hidden></div>
+        <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+      </div>
+      <div class="transport">
+        <button id="btnPlay" class="play" aria-label="播放 / 暂停">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="ic-play" d="M8 5.5v13l11-6.5z"/><g class="ic-pause"><rect x="7" y="5.5" width="3.6" height="13" rx="1"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1"/></g></svg>
+        </button>
+        <span id="timeNow" class="tc">00:00.00</span><span class="tc dim">/</span><span id="timeDur" class="tc dim">00:00.00</span>
+        <input id="scrub" class="scrub" type="range" min="0" max="10000" value="0" aria-label="播放位置">
+        <button id="btnLoop" class="btn tiny" aria-pressed="true" title="循环播放">循环</button>
+        <button id="btnPrev" class="btn tiny" title="回到上一个方案">◀</button>
+        <span id="histPos" class="mono dim">0 / 0</span>
+        <button id="btnNext" class="btn tiny" title="前往下一个方案">▶</button>
+        <button id="btnShuffle" class="btn amber" title="保留所有设置，只把分镜的排版与演出重新抽一次（锁定的行不动）">重抽分镜</button>
+        <button id="btnOmakase" class="btn omakase" title="风格 / 气质 / 动效 / 配色 / 分镜 全部重来（快捷键 R）">一键成片 <span class="kbd">R</span></button>
+      </div>
+      <canvas id="timeline" aria-label="时间轴：点击或拖动可跳转"></canvas>
+      <div class="tl-foot"><span id="tlInfo" class="mono dim"></span><span class="dim">色块 = 分镜 · 竖刻度 = 拍点 · 橙线 = 有画面特效</span></div>
+      <div class="layout-strip" id="layoutStrip" aria-label="排版缩略图：点击替换当前这一句的排版"></div>
+      <div class="cutbar" id="cutInfo"></div>
+      <div class="statusbar"><span id="statusLeft" class="mono"></span></div>
+    </section>
+
+    <!-- ===================== 右：风格与输出 ===================== -->
+    <aside class="col col-right" id="inspector" aria-label="风格与输出">
+      <nav class="tabs" role="tablist" id="tabs">
+        <button role="tab" data-panel="style" aria-selected="true">风格</button>
+        <button role="tab" data-panel="motion" aria-selected="false">动效</button>
+        <button role="tab" data-panel="parts" aria-selected="false">手法</button>
+        <button role="tab" data-panel="out" aria-selected="false">输出</button>
+      </nav>
+
+      <!-- ---------- 简易模式 ---------- -->
+      <div class="pane easy" data-pane="easy" hidden>
+        <div class="hero">
+          <div class="hero-heading"><span>从歌词到画面</span><h2>让每一句<br>都踩在节奏上。</h2><p>写下歌词，选一版喜欢的运动方式，直接预览并导出。</p></div>
+          <button id="btnOmakaseBig" class="omakase-big">生成新版本 <span aria-hidden="true">↗</span></button>
+          <label class="chk director-toggle"><input id="eDirector" class="director-toggle-input" type="checkbox" checked><span>导演编排<small>让字体、版式、背景和转场按风格成套配合。</small></span></label>
+          <div class="hist">
+            <button id="btnPrev2" class="btn">上一版</button>
+            <span id="histPos2" class="mono dim">0 / 0</span>
+            <button id="btnNext2" class="btn">下一版</button>
+          </div>
+        </div>
+        <label class="chk"><input id="eDesign" class="design-toggle" type="checkbox" checked><span>启用动效设计层<small>本作新增的 40 种演出：感光显影、扫描显影、落定、磁吸、激振、潮汐、微粒化、被风吹散、沉入景深、灼烧、蒸发…（关掉就只用经典那套）</small></span></label>
+        <label class="chk"><input id="eWa" class="wa-toggle" type="checkbox" checked><span>启用和风元素<small>灯笼、青海波、麻叶纹、月夜、水波</small></span></label>
+        <div class="sec-h"><h3>当前方案</h3></div>
+        <div id="easyNow" class="now"></div>
+        <div class="sec-h"><h3>局部换一换</h3></div>
+        <div class="grid2">
+          <button id="eStyle" class="btn" title="只换风格">换风格</button>
+          <button id="ePalette" class="btn" title="只换强调色与色散双色">换配色</button>
+          <button id="eMood" class="btn" title="只换动的气质：强弱、故障量、常用手法">换气质</button>
+          <button id="eCut" class="btn" title="只重抽分镜">换分镜</button>
+        </div>
+        <div class="sec-h"><h3>导出</h3></div>
+        <div class="fields">
+          <label class="fd">画面比<select id="eAspect"></select></label>
+          <label class="fd">分辨率<select id="eRes"></select></label>
+          <label class="fd">帧率<select id="eFps"></select></label>
+          <label class="fd wide">背景<select id="eKey"></select></label>
+        </div>
+        <button id="eMP4" class="btn go wide">导出 MP4</button>
+        <button class="linkish terms-open">输出的视频 / 图片，权利归你</button>
+        <div class="progress-box" hidden>
+          <div class="bar"><i></i></div>
+          <div class="prow"><span class="ptext mono dim">—</span><button class="btn tiny cancel">中止</button></div>
+        </div>
+      </div>
+
+      <!-- ---------- 风格 ---------- -->
+      <div class="pane" data-pane="style" hidden>
+        <div class="sec-h"><h3>风格</h3><span id="styleCount" class="mono dim"></span></div>
+        <div class="style-grid" id="styleStrip"></div>
+
+        <div class="sec-h"><h3>字体角色</h3></div>
+        <div id="fontRoles"></div>
+        <div class="row">
+          <input id="localFont" class="input" type="text" placeholder="本机字体名，例如 思源宋体 / 苹方" aria-label="本机字体名">
+          <button id="btnAddFont" class="btn tiny">添加</button>
+        </div>
+        <label class="btn tiny wide">载入字体文件（.ttf / .otf / .woff2）<input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2" hidden></label>
+
+        <div class="sec-h"><h3>强调色与色散</h3></div>
+        <label class="chk"><input id="accentOn" type="checkbox"><span>用我自己的颜色<small>套用到所有配色方案上，并按背景明暗自动校正到看得清</small></span></label>
+        <div id="accentRow" class="swatch-row"></div>
+        <div class="row">
+          <button id="btnRandPalette" class="btn amber">随机配色</button>
+          <div id="paletteSwap" class="mini-swatches" aria-hidden="true"></div>
+        </div>
+
+        <div class="sec-h"><h3>底色与字色</h3></div>
+        <label class="chk"><input id="colorOn" type="checkbox"><span>自己指定主背景与主字色</span></label>
+        <div id="baseRow" class="swatch-row"></div>
+      </div>
+
+      <!-- ---------- 动效 ---------- -->
+      <div class="pane" data-pane="motion" hidden>
+        <div class="sec-h"><h3>动效强度</h3></div>
+        <label class="chk director-toggle"><input id="tDirector" class="director-toggle-input" type="checkbox" checked><span>导演编排<small>让字体、版式、背景和转场成套配合；关掉后自由随机。</small></span></label>
+        <div id="fxSliders"></div>
+        <div class="row">
+          <label class="chk inline"><input id="fxFlash" type="checkbox" checked><span>允许闪白</span></label>
+          <label class="fd inline">节奏<select id="fxKoma">
+            <option value="0">逐帧（跟随输出帧率）</option>
+            <option value="12">二格一拍（12 张/秒）</option>
+            <option value="8">三格一拍（8 张/秒）</option>
+          </select></label>
+        </div>
+        <p class="note">默认逐帧运动，导出 60fps 更顺滑。想要手绘式抽帧感，可以切到二格或三格一拍。</p>
+
+        <div class="sec-h"><h3>画面信息</h3></div>
+        <div class="fields">
+          <label class="fd">角标<select id="fxHud">
+            <option value="auto">看风格而定</option>
+            <option value="on">一直显示</option>
+            <option value="off">不显示</option>
+          </select></label>
+          <label class="fd">随机种子<input id="seed" type="number" step="1"></label>
+          <label class="fd">&nbsp;<button id="btnSeed" class="btn tiny">换一个种子</button></label>
+        </div>
+        <p class="note">同一个种子排出来的片子完全一样。满意的版本记下种子，之后怎么改别的都不怕丢。</p>
+
+        <div class="sec-h"><h3>动效范围</h3></div>
+        <label class="chk"><input id="tDesign" class="design-toggle" type="checkbox" checked><span>动效设计层<small>本作重新设计的那一层：光学显影 / 物理重量 / 声学响应 / 材质分解，共 40 种，在手法列表里带「新」字</small></span></label>
+        <label class="chk"><input id="tWa" class="wa-toggle" type="checkbox" checked><span>和风元素<small>灯笼、青海波、麻叶纹、月夜、水波，带「和」字</small></span></label>
+      </div>
+
+      <!-- ---------- 手法 ---------- -->
+      <div class="pane" data-pane="parts" hidden>
+        <div class="sec-h"><h3>手法</h3><span id="partsTotal" class="mono dim"></span></div>
+        <p class="note">全部零件都在这里。勾掉的不会被随机抽到（手动指定的仍然可用）。</p>
+        <div class="row">
+          <input id="partFilter" class="input" type="text" placeholder="按名字筛选" aria-label="按名字筛选手法">
+          <button id="btnPartsAll" class="btn tiny">全开</button>
+          <button id="btnPartsNone" class="btn tiny">全关</button>
+        </div>
+        <div id="partLists"></div>
+      </div>
+
+      <!-- ---------- 输出 ---------- -->
+      <div class="pane" data-pane="out" hidden>
+        <div class="sec-h"><h3>导出设置</h3></div>
+        <div class="fields">
+          <label class="fd">画面比<select id="outAspect"></select></label>
+          <label class="fd">分辨率<select id="outRes"></select></label>
+          <label class="fd">帧率<select id="outFps"></select></label>
+          <label class="fd">画质<select id="outQuality">
+            <option value="standard">标准</option>
+            <option value="high" selected>高</option>
+            <option value="max">最高</option>
+          </select></label>
+          <label class="fd wide">背景<select id="outKey"></select></label>
+        </div>
+        <p class="note" id="keyNote">选「绿幕 / 黑幕」后，画面只剩白色的字与演出，其他一律去掉。绿幕给剪辑软件抠像用，黑幕给「滤色」叠加或亮度键用。预览里会立刻看到效果。</p>
+
+        <div class="outbtns">
+          <button id="btnMP4" class="btn go wide">导出 MP4<small id="estSize" class="dim"></small></button>
+          <button id="btnPNG" class="btn wide">连番 PNG（ZIP）</button>
+          <button id="btnPNGA" class="btn wide">透明 PNG（ZIP，无背景）</button>
+        </div>
+
+        <div class="progress-box" hidden>
+          <div class="bar"><i></i></div>
+          <div class="prow"><span class="ptext mono dim">—</span><button class="btn tiny cancel">中止</button></div>
+        </div>
+
+        <div class="sec-h"><h3>工程</h3></div>
+        <div class="row">
+          <button id="btnSave2" class="btn">保存 .json</button>
+          <label class="btn">打开 .json<input id="fileProject2" type="file" accept=".json,application/json" hidden></label>
+        </div>
+        <p class="note" id="codecNote">导出全部在本机完成（推荐 Chrome / Edge）。</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ===================== 说明 ===================== -->
+<dialog id="helpDlg" class="dlg" aria-labelledby="helpTitle">
+  <form method="dialog">
+    <h2 id="helpTitle">RuiC-TextPV</h2>
+    <p>把歌词排成文字 PV：填进歌词，它会自动把每一句切成几个镜头，给每个镜头挑排版、出现方式、停留动作、消失方式、装饰、镜头运动和画面特效，然后导出成 MP4。</p>
+    <h3>三件事值得先知道</h3>
+    <ol class="nums">
+      <li><b>一键成片</b>（快捷键 <span class="kbd">R</span>）：整支片子的风格、气质、动效、配色、分镜一起换。连按几次，总有一版能用。</li>
+      <li><b>随机种子</b>决定一切：同一个种子，排出来的片子一模一样。满意的版本记下种子，之后怎么改别的都不怕丢。</li>
+      <li><b>动效设计层</b>是本作新写的部分，按四条主线设计：光学显影（感光、扫描、合焦、灼烧）、物理重量（落定、弹网、磁吸、阶梯）、声学响应（激振、潮汐、声压、心跳、涟漪）、材质分解（微粒化、吹散、蒸发、沉入景深）。想只用经典那套，把它关掉即可。</li>
+    </ol>
+    <h3>输出物的权利</h3>
+    <p>用这个工具做出来的<b>视频与图片，版权归制作它的人</b>，商用、非商用都随你。你用的歌词与音乐的权利仍然属于各自的权利人。</p>
+    <h3>隐私</h3>
+    <p class="dim">歌词与音乐只在你的浏览器里处理，不会上传到任何服务器。唯一的外部请求是 Google Fonts 的字体，而且只加载当前用得到的那些字重。</p>
+    <details class="oss">
+      <summary>用到的开源件</summary>
+      <p>MP4 封装：mp4-muxer（MIT License）<br>字体：Google Fonts 各字族（SIL Open Font License 1.1）</p>
+    </details>
+    <p class="dim mono">RuiC-TextPV · 原创设计与实现的歌词文字 PV 工具。</p>
+    <div class="dlg-foot"><button value="close" class="btn go" autofocus>知道了</button></div>
+  </form>
+</dialog>

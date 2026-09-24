@@ -1,0 +1,11 @@
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地部署目录（部署时把 index.html 拷到任意静态托管即可，不必入库）
+deploy/
+dev/
+
+# 依赖与日志
+node_modules/
+*.log
